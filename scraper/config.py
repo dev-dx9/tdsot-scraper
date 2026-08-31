@@ -1,0 +1,24 @@
+from pathlib import Path
+
+from pydantic import computed_field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+BASE_DIR = Path(__file__).resolve().parents[1]
+
+
+class Settings(BaseSettings):
+    domain: str
+    scraping_category_urls: list[str] = []
+
+    model_config = SettingsConfigDict(
+        env_file=BASE_DIR / '.env',
+        env_file_encoding='utf-8',
+    )
+
+    @computed_field
+    @property
+    def site_url(self) -> str:
+        return f'https://{self.domain}'
+
+
+settings = Settings()  # pyright: ignore[reportCallIssue]
