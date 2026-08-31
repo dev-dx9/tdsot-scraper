@@ -1,5 +1,5 @@
 import re
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 from web_poet import Returns, WebPage, field, handle_urls
 
@@ -13,6 +13,8 @@ from scraper.selectors import (
     PRODUCT_CATEGORY,
     PRODUCT_CURRENCY,
     PRODUCT_DESCRIPTION,
+    PRODUCT_DOCUMENT_URL,
+    PRODUCT_DOCUMENTS,
     PRODUCT_IMAGE_URLS,
     PRODUCT_NAME,
     PRODUCT_PRICE,
@@ -25,7 +27,7 @@ from scraper.selectors import (
 class ProductPage(WebPage, Returns[ProductItem]):
     def _get_value(self, selector: str) -> str | None:
         value = self.response.css(selector).get()
-        return value.strip() if value is not None else None
+        return (value.strip() or None) if value is not None else None
 
     @staticmethod
     def _get_original_image_url(url: str) -> str:
@@ -33,20 +35,6 @@ class ProductPage(WebPage, Returns[ProductItem]):
             r'/resize-cache/(iblock/.+?)/\d+-\d+-[^/]+/',
             r'/\1/',
             url,
-        )
-
-    @staticmethod
-    def _clean_description(node) -> str:
-        for element in node.xpath(
-            './/*[@style or @align or @width or @height or @border]'
-        ):
-            for attribute in ('style', 'align', 'width', 'height', 'border'):
-                element.attrib.pop(attribute, None)
-
-        return (
-            ''.join(node.xpath('./node()').getall())
-            .translate(str.maketrans('', '', '\n\r\t'))
-            .strip()
         )
 
     @field
@@ -92,8 +80,6 @@ class ProductPage(WebPage, Returns[ProductItem]):
     def currency(self) -> str | None:
         return self._get_value(PRODUCT_CURRENCY)
 
-    import re
-
     @field
     def description(self) -> str | None:
         description = self.response.css(PRODUCT_DESCRIPTION)
@@ -101,23 +87,47 @@ class ProductPage(WebPage, Returns[ProductItem]):
         if not description:
             return None
 
-        return self._clean_description(description)
+        value = ''.join(description.xpath('./node()').getall())
+
+        value = re.sub(
+            r'\s(?:style|border|width|height)=(["\']).*?\1',
+            '',
+            value,
+            flags=re.IGNORECASE,
+        )
+
+        value = re.sub(
+            r'<p>\s*(?:<br\s*/?>\s*)+</p>',
+            '',
+            value,
+            flags=re.IGNORECASE,
+        )
+
+        value = value.replace('\xa0', ' ')
+        value = re.sub(r'[\n\r\t]+', ' ', value)
+        value = re.sub(r' {2,}', ' ', value)
+
+        return value.strip() or None
 
     @field
     def image_urls(self) -> list[str]:
         image_urls = self.response.css(PRODUCT_IMAGE_URLS).getall()
 
-        return [
-            self._get_original_image_url(urljoin(str(self.response.url), url))
-            for url in image_urls
-            if url.lower().endswith(('.jpg', '.jpeg', '.png', '.webp'))
-        ]
+        result = []
+        for url in image_urls:
+            full_url = urljoin(str(self.response.url), url)
+            path = urlparse(full_url).path.lower()
+
+            if path.endswith(('.jpg', '.jpeg', '.png', '.webp')):
+                result.append(self._get_original_image_url(full_url))
+
+        return result
 
     @field
     def attributes(self) -> dict[str, str]:
         attributes = {}
 
-        for attribute in self.css(PRODUCT_ATTRIBUTES):
+        for attribute in self.response.css(PRODUCT_ATTRIBUTES):
             name = attribute.css(PRODUCT_ATTRIBUTE_NAME).get()
             value = attribute.css(PRODUCT_ATTRIBUTE_VALUE).get()
 
@@ -125,3 +135,11 @@ class ProductPage(WebPage, Returns[ProductItem]):
                 attributes[name.strip().rstrip(':')] = value.strip()
 
         return attributes
+
+    @field
+    def documents(self) -> list[str]:
+        return [
+            self.urljoin(url)
+            for document in self.response.xpath(PRODUCT_DOCUMENTS)
+            for url in document.css(PRODUCT_DOCUMENT_URL).getall()
+        ]

@@ -18,3 +18,4 @@ class ProductItem:
     description: str | None
     image_urls: list[str]
     attributes: dict[str, str]
+    documents: list[str]

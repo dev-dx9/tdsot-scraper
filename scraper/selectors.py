@@ -17,7 +17,8 @@ PRODUCT_IMAGE_URLS = '.prod-detail [itemprop="image"]::attr(src)'
 PRODUCT_ATTRIBUTES = '.prod-detail .detail-props__list .props-list__item'
 PRODUCT_ATTRIBUTE_NAME = '.props-list__label ::text'
 PRODUCT_ATTRIBUTE_VALUE = '.props-list__value ::text'
-PRODUCT_DOCUMENTS = '.sec:has(h2:contains("Документация")) li.depth-level-1'
-PRODUCT_DOCUMENT_NAME = '.cert__name::text'
-PRODUCT_DOCUMENT_URL = '.doc-cert__name::attr(href)'
-PRODUCT_DOCUMENT_INFO = '.doc-cert__ext::text'
+PRODUCT_DOCUMENTS = (
+    '//div[contains(@class, "sec")][.//h2[normalize-space()="Документация"]]'
+    '//li[contains(@class, "depth-level-1")]'
+)
+PRODUCT_DOCUMENT_URL = '.depth-level-2 .doc-cert__name::attr(href)'
